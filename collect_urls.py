@@ -78,15 +78,46 @@ def get_all_chapter_urls_selenium():
             
     return all_manhwa_data
 
+def merge_into_existing(existing_path, fresh_data):
+    """
+    Load existing chapter_list.json (if any) and merge fresh_data into it.
+    - Existing titles get their chapter URLs updated to the latest from the site.
+    - New titles are appended.
+    - Titles not seen in this scrape are kept as-is (never deleted).
+    Returns the merged list.
+    """
+    try:
+        with open(existing_path, 'r', encoding='utf-8') as f:
+            existing = json.load(f)
+    except FileNotFoundError:
+        existing = []
+
+    existing_by_title = {m['title']: m for m in existing}
+    fresh_by_title = {m['title']: m for m in fresh_data}
+
+    # Update chapter URLs for titles seen in fresh scrape
+    for title, fresh in fresh_by_title.items():
+        if title in existing_by_title:
+            existing_by_title[title]['chapters'] = fresh['chapters']
+        else:
+            existing_by_title[title] = fresh
+
+    # Preserve insertion order: existing titles first, then any brand-new ones appended
+    merged = list(existing_by_title.values())
+    return merged
+
+
 if __name__ == "__main__":
-    manhwa_list = get_all_chapter_urls_selenium()
-    
-    if manhwa_list:
-        print(f"\nSuccessfully collected data for {len(manhwa_list)} manhwa.")
-        
-        # Save the collected data to a JSON file for the next step.
+    fresh = get_all_chapter_urls_selenium()
+
+    if fresh:
+        merged = merge_into_existing('chapter_list.json', fresh)
+        new_titles = len(merged) - (len(merged) - len(fresh))  # titles added this run
+        print(f"\nScrape found {len(fresh)} manhwa this run.")
+        print(f"Merged total: {len(merged)} manhwa in chapter_list.json")
+
         with open('chapter_list.json', 'w', encoding='utf-8') as f:
-            json.dump(manhwa_list, f, indent=4)
-        print("\n✅ Saved all collected URLs to chapter_list.json")
+            json.dump(merged, f, indent=4)
+        print("✅ Saved merged chapter_list.json — no existing titles were removed.")
     else:
         print("\nNo data was collected. The script failed to find any manhwa blocks.")
